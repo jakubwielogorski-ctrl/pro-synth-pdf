@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProSynth | Advanced Document Synthesizer</title>
+    <!-- Biblioteki zewnętrzne -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .glass-effect { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        .drop-zone.active { border-color: #3b82f6; background-color: #eff6ff; transform: scale(1.01); }
+        .file-card { transition: all 0.2s ease; }
+        .file-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .loader { border-top-color: #3b82f6; animation: spinner 0.6s linear infinite; }
+        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+    <div class="min-h-screen flex flex-col">
+        <!-- Nawigacja -->
+        <nav class="glass-effect sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-sm">
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                </div>
+                <span class="text-xl font-bold tracking-tight text-slate-900">ProSynth<span class="text-blue-600">.io</span></span>
+            </div>
+            <div class="hidden md:flex space-x-6 text-sm font-medium text-slate-500">
+                <a href="#" class="hover:text-blue-600 transition">Możliwości</a>
+                <a href="#" class="hover:text-blue-600 transition">API</a>
+                <a href="#" class="hover:text-blue-600 transition">Bezpieczeństwo</a>
+            </div>
+            <button class="bg-slate-900 text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-slate-800 transition">Kontakt</button>
+        </nav>
+
+        <main class="flex-grow container mx-auto px-4 py-12 max-w-5xl">
+            <header class="text-center mb-16">
+                <h2 class="text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Kompiluj dokumenty z prędkością światła.</h2>
+                <p class="text-lg text-slate-500 max-w-2xl mx-auto">Zaawansowany algorytm syntezy obrazów do formatu PDF. Przetwarzanie lokalne bez wysyłania danych do chmury — prywatność Twoich danych jest priorytetem.</p>
+            </header>
+
+            <!-- Strefa zrzutu -->
+            <div id="dropZone" class="drop-zone border-2 border-dashed border-slate-300 rounded-3xl p-12 text-center cursor-pointer transition-all bg-white shadow-xl hover:shadow-2xl mb-10">
+                <div class="flex flex-col items-center">
+                    <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </div>
+                    <p class="text-xl font-semibold text-slate-800">Przeciągnij zdjęcia lub kliknij, aby wybrać</p>
+                    <p class="text-slate-400 mt-2">Obsługuje JPG, PNG, WEBP (do 500 stron w jednej sesji)</p>
+                </div>
+                <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
+            </div>
+
+            <!-- Kontrolki i Lista -->
+            <div id="editorSection" class="hidden animate-fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold text-slate-900">Kolejka syntezy (<span id="fileCount">0</span>)</h3>
+                    <div class="flex space-x-2">
+                        <button id="clearBtn" class="px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-lg transition">Wyczyść</button>
+                        <button id="convertBtn" class="bg-blue-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition">Generuj PDF</button>
+                    </div>
+                </div>
+
+                <!-- Lista plików -->
+                <div id="fileList" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <!-- Dynamiczne karty plików -->
+                </div>
+            </div>
+
+            <!-- Modal Postępu -->
+            <div id="progressModal" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center z-[100] backdrop-blur-sm">
+                <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center">
+                    <div class="loader w-12 h-12 border-4 border-slate-200 rounded-full mx-auto mb-4"></div>
+                    <h4 class="text-lg font-bold text-slate-900 mb-2">Trwa generowanie dokumentu</h4>
+                    <p class="text-sm text-slate-500 mb-4">Przetworzono: <span id="progressText">0%</span></p>
+                    <div class="w-full bg-slate-100 rounded-full h-2">
+                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full w-0 transition-all"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="bg-white border-t border-slate-200 py-12">
+            <div class="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center">
+                <div class="text-slate-400 text-sm mb-4 md:mb-0">
+                    &copy; 2026 ProSynth Automation Labs. Zaprojektowane przez Jakuba Wielogórskiego.
+                </div>
+                <div class="flex space-x-6 text-slate-400 text-sm">
+                    <a href="#" class="hover:text-blue-600 transition">Polityka Prywatności</a>
+                    <a href="#" class="hover:text-blue-600 transition">Warunki Usługi</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const { jsPDF } = window.jspdf;
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const editorSection = document.getElementById('editorSection');
+        const convertBtn = document.getElementById('convertBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const progressModal = document.getElementById('progressModal');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const fileCountDisplay = document.getElementById('fileCount');
+        
+        let filesArray = [];
+
+        dropZone.onclick = () => fileInput.click();
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('active'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('active');
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('active');
+            addFiles(e.dataTransfer.files);
+        };
+        fileInput.onchange = (e) => addFiles(e.target.files);
+
+        async function addFiles(files) {
+            const newFiles = Array.from(files);
+            // Sortowanie automatyczne po nazwie
+            newFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+            
+            for (let file of newFiles) {
+                const preview = await getPreview(file);
+                filesArray.push({ file, preview });
+            }
+            renderFiles();
+        }
+
+        function getPreview(file) {
+            return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderFiles() {
+            if (filesArray.length > 0) {
+                editorSection.classList.remove('hidden');
+                dropZone.classList.add('py-6');
+            } else {
+                editorSection.classList.add('hidden');
+                dropZone.classList.remove('py-6');
+            }
+
+            fileCountDisplay.innerText = filesArray.length;
+            fileList.innerHTML = '';
+            
+            filesArray.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'file-card bg-white border border-slate-200 rounded-xl p-2 relative group';
+                card.innerHTML = `
+                    <div class="aspect-[3/4] rounded-lg overflow-hidden bg-slate-50 border border-slate-100 mb-2">
+                        <img src="${item.preview}" class="w-full h-full object-cover">
+                    </div>
+                    <p class="text-[10px] font-medium text-slate-500 truncate px-1">${item.file.name}</p>
+                    <button onclick="removeFile(${index})" class="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                `;
+                fileList.appendChild(card);
+            });
+        }
+
+        window.removeFile = (index) => {
+            filesArray.splice(index, 1);
+            renderFiles();
+        };
+
+        clearBtn.onclick = () => {
+            filesArray = [];
+            renderFiles();
+        };
+
+        convertBtn.onclick = async () => {
+            if (filesArray.length === 0) return;
+            
+            progressModal.classList.remove('hidden');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+
+            for (let i = 0; i < filesArray.length; i++) {
+                if (i > 0) pdf.addPage();
+                
+                const imgData = filesArray[i].preview;
+                const img = await loadImage(imgData);
+                
+                const imgRatio = img.width / img.height;
+                const pageRatio = pageWidth / pageHeight;
+
+                let finalW, finalH;
+                if (imgRatio > pageRatio) {
+                    finalW = pageWidth;
+                    finalH = pageWidth / imgRatio;
+                } else {
+                    finalH = pageHeight;
+                    finalW = pageHeight * imgRatio;
+                }
+
+                pdf.addImage(imgData, 'JPEG', (pageWidth - finalW) / 2, (pageHeight - finalH) / 2, finalW, finalH, undefined, 'FAST');
+                
+                const prog = Math.round(((i + 1) / filesArray.length) * 100);
+                progressBar.style.width = prog + '%';
+                progressText.innerText = prog + '%';
+            }
+
+            pdf.save(`ProSynth_Export_${new Date().getTime()}.pdf`);
+            setTimeout(() => progressModal.classList.add('hidden'), 500);
+        };
+
+        function loadImage(src) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.src = src;
+            });
+        }
+    </script>
+</body>
+</html>
